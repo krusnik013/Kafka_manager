@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  zookeeper:
+    image: ${ZOOKEEPER_IMAGE}
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_PORT}:${ZOOKEEPER_PORT}"
+
+  kafka:
+    image: ${KAFKA_IMAGE}
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "${KAFKA_PORT}:${KAFKA_PORT}"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:${KAFKA_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD", "bash", "-c", "kafka-topics --bootstrap-server kafka:${KAFKA_PORT} --list || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  producer_service:
+    build: .
+    container_name: kafka_producer_service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      ZMQ_SERVER_HOST: ${ZMQ_SERVER_HOST}
+      ZMQ_SERVER_PORT: ${ZMQ_SERVER_PORT}
+    ports:
+      - "${ZMQ_SERVER_PORT}:${ZMQ_SERVER_PORT}"
+    volumes:
+      - .:/app
+    command: ["python", "src/main.py"]
+
+  consumer_service:
+    build: .
+    container_name: kafka_consumer_service
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      ZMQ_SERVER_HOST: ${ZMQ_SERVER_HOST}
+      ZMQ_SERVER_PORT: ${ZMQ_SERVER_PORT}
+    volumes:
+      - .:/app
+    command: ["python", "src/main.py"]
+
+volumes:
+  kafka-data:

@@ -1,0 +1,5 @@
+kafka-python
+fuzzywuzzy
+python-Levenshtein
+zmq
+pyzmq
